@@ -164,9 +164,8 @@ The ETL pipeline can be scheduled using cron.
 Example:
 
 ```text
-0 1 * * * . "$HOME/.etl_env" && /bin/bash "/home/olayi/cde_assignments/coredataengineers_etl_mastery/scripts/etl.sh" >> "/home/olayi/cde_assignments/coredataengineers_etl_mastery/etl.log" 2>&1
+0 1 * * * . "$HOME/.etl_env" && /bin/bash "$HOME/path/to/project/scripts/etl.sh" >> "$HOME/path/to/project/etl.log" 2>&1
 ```
-
 The schedule:
 
 ```text
