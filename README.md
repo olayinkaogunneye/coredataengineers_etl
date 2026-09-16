@@ -1,124 +1,297 @@
-# CoreDataEngineers Linux and Git ETL Project
+# CoreDataEngineers Bash ETL Pipeline
+
+A Bash-based ETL pipeline built as part of the CoreDataEngineers data engineering bootcamp.
+
+The project demonstrates how to extract data from a public CSV source, validate the extracted structure, transform the required fields, validate the transformed output, load the result into a Gold layer, and automate execution using cron.
 
 ## Project Overview
 
-This project demonstrates a simple ETL workflow using Bash scripting, Linux commands, cron scheduling, and Git version control.
+The pipeline processes the New Zealand Stats Annual Enterprise Survey 2023 financial-year provisional dataset.
 
-The project uses the New Zealand Annual Enterprise Survey 2023 financial-year provisional dataset.
+The workflow is:
 
-## Project Structure
+**Extract → Validate → Transform → Validate → Load**
 
-```text
-coredataengineers_etl/
-├── Gold/
-├── Transformed/
-├── json_and_CSV/
-├── raw/
-├── scripts/
-│   ├── etl.sh
-│   └── move_files.sh
-├── .gitignore
-└── README.md
-
-
-## Project Structure
-
-The project is organised into separate directories for the raw data, transformed data, final output, scripts, and CSV/JSON file management.
-
-- `raw/` — stores the original CSV downloaded from the source.
-- `Transformed/` — stores the transformed dataset.
-- `Gold/` — stores the final output of the ETL process.
-- `json_and_CSV/` — destination for CSV and JSON files moved by the file-management script.
-- `scripts/` — contains the Bash scripts used in the project.
-  - `etl.sh` — performs the Extract, Transform, and Load process.
-  - `move_files.sh` — moves CSV and JSON files from a specified directory.
-- `.gitignore` — specifies files that should not be tracked by Git.
-- `README.md` — provides documentation for the project.
-
+The project also includes a separate Bash script for moving CSV and JSON files from a user-specified source directory into a common destination directory.
 
 ## ETL Pipeline
 
-The ETL process is implemented in `scripts/etl.sh`.
+### 1. Extract
 
-### Extract
+The ETL script downloads the source CSV using `curl`.
 
-The script downloads the Annual Enterprise Survey 2023 financial-year provisional CSV dataset using the `CSV_URL` environment variable.
-
-The downloaded file is saved in the `raw/` directory.
-
-### Transform
-
-The transformation step uses `awk` to process the CSV file.
-
-It:
-- Renames `Variable_code` to `variable_code`
-- Selects only the required columns: `year`, `Value`, `Units`, and `variable_code`
-- Saves the transformed dataset as `Transformed/2023_year_finance.csv`
-
-### Load
-
-The transformed dataset is copied from the `Transformed/` directory into the `Gold/` directory.
-
-The script displays a confirmation message after each stage to indicate whether the operation was successful.
-
-
-### Running the ETL Script
-
-The `CSV_URL` environment variable must be available before running the script.
-
-The environment variable can be loaded and the ETL script executed with:
+The source URL is supplied through the `CSV_URL` environment variable rather than being hard-coded into the script.
 
 ```bash
-source ~/.etl_env
-./scripts/etl.sh
+export CSV_URL="https://www.stats.govt.nz/assets/Uploads/Annual-enterprise-survey/Annual-enterprise-survey-2023-financial-year-provisional/Download-data/annual-enterprise-survey-2023-financial-year-provisional.csv"
+```
 
+The downloaded file is stored in:
 
-## Cron Scheduling
+```text
+raw/
+```
 
-The ETL script is scheduled to run automatically every day at midnight using cron.
+The download uses:
 
-The cron schedule is:
+* `-L` to follow redirects
+* `-f` to fail when the HTTP request returns an error
 
-0 0 * * *
+### 2. Validate the raw data
 
-The cron job loads the CSV_URL environment variable, runs the ETL script, and records the script output in etl.log.
+After extraction, the script reads the CSV header and compares it against the expected source structure.
 
-The cron job was tested by temporarily setting the schedule to run at a specific time and checking the log file to confirm that the ETL process executed successfully.
+This provides a basic structural check before transformation begins.
 
+The validation also handles the carriage-return character that can appear in Windows-style CSV line endings.
 
-## CSV and JSON File Management
+### 3. Transform
 
-The `scripts/move_files.sh` script is used to move CSV and JSON files from a specified source directory into the `json_and_CSV/` directory.
+`awk` is used to:
 
-The script accepts the source directory as an argument.
+* parse the CSV fields
+* select the required columns
+* rename `Variable_code` to `variable_code`
+* create the required output structure
+
+The transformed dataset contains:
+
+```text
+year,Value,Units,variable_code
+```
+
+The transformed file is written to:
+
+```text
+Transformed/2023_year_finance.csv
+```
+
+### 4. Validate the transformed data
+
+The script checks that:
+
+* the transformed file exists and is not empty
+* the transformed header matches the required structure
+
+The Gold layer is only updated after these checks succeed.
+
+### 5. Load
+
+The validated transformed file is copied into:
+
+```text
+Gold/2023_year_finance.csv
+```
+
+The Gold output is then checked to confirm that it exists and is not empty.
+
+## File Organisation
+
+```text
+coredataengineers_etl_mastery/
+│
+├── raw/
+│   └── annual-enterprise-survey-2023-financial-year-provisional.csv
+│
+├── Transformed/
+│   └── 2023_year_finance.csv
+│
+├── Gold/
+│   └── 2023_year_finance.csv
+│
+├── json_and_CSV/
+│   ├── customers.json
+│   └── sales.csv
+│
+├── my_files/
+│   └── notes.txt
+│
+├── scripts/
+│   ├── etl.sh
+│   └── move_files.sh
+│
+├── .gitignore
+└── README.md
+```
+
+## Scripts
+
+### `scripts/etl.sh`
+
+Runs the complete ETL workflow:
+
+```text
+CSV_URL
+   ↓
+Extract
+   ↓
+Raw validation
+   ↓
+Transform with awk
+   ↓
+Transformed validation
+   ↓
+Load
+   ↓
+Gold
+```
+
+The script uses paths derived from its own location, allowing it to be run without relying on the current working directory.
+
+### `scripts/move_files.sh`
+
+Moves CSV and JSON files from a source directory supplied as the first command-line argument.
 
 Example:
 
 ```bash
-./scripts/move_files.sh <source_directory>
+bash scripts/move_files.sh my_files
+```
 
+The script:
 
+1. receives the source directory through `$1`
+2. checks that the directory exists
+3. identifies CSV and JSON files using `find`
+4. moves matching files into `json_and_CSV/`
 
-That last sentence is useful because it shows **you actually tested the requirement**, rather than merely creating the script.
+Non-CSV/JSON files are left untouched.
 
-Once that's in, we'll do the **Git Version Control** section.
+## Automation with Cron
 
+The ETL pipeline can be scheduled using cron.
 
-## Git Version Control
+Example:
 
-Git is used to track changes throughout the project.
+```text
+0 1 * * * . "$HOME/.etl_env" && /bin/bash "/home/olayi/cde_assignments/coredataengineers_etl_mastery/scripts/etl.sh" >> "/home/olayi/cde_assignments/coredataengineers_etl_mastery/etl.log" 2>&1
+```
 
-The project uses the `main` branch and includes the Bash scripts, ETL output files, documentation, and project configuration.
+The schedule:
 
+```text
+0 1 * * *
+```
 
-## Tools Used
+means the ETL runs every day at 1:00 AM.
 
-- Bash
-- Linux/Ubuntu (WSL)
-- curl
-- awk
-- find
-- mv
-- cron
-- Git
-- GitHub
+The environment file provides the `CSV_URL` variable required by the ETL script.
+
+Output and errors are redirected to `etl.log` for monitoring.
+
+## Running the ETL Manually
+
+Load the environment variable:
+
+```bash
+. "$HOME/.etl_env"
+```
+
+Then run:
+
+```bash
+bash scripts/etl.sh
+```
+
+Or in one command:
+
+```bash
+. "$HOME/.etl_env" && bash scripts/etl.sh
+```
+
+## Error Handling
+
+The pipeline uses Bash exit statuses to stop processing when important steps fail.
+
+Examples include:
+
+* missing `CSV_URL`
+* failed HTTP download
+* unexpected source header
+* failed transformation
+* unexpected transformed header
+* empty output files
+
+A failed validation prevents the pipeline from continuing to the next stage.
+
+For example, the Gold layer is only loaded after the transformed output has passed validation.
+
+## Validation Strategy
+
+The pipeline deliberately validates structure rather than relying on a fixed number of rows.
+
+This is because the source dataset may legitimately change in size over time.
+
+Current checks include:
+
+| Stage          | Check                                   |
+| -------------- | --------------------------------------- |
+| Extraction     | `curl -f` confirms HTTP request success |
+| Raw            | Expected source header                  |
+| Transformation | Output file is non-empty                |
+| Transformation | Required transformed header             |
+| Load           | Gold file is non-empty                  |
+
+## Testing
+
+The pipeline was tested for:
+
+* successful data extraction
+* failed HTTP requests
+* source-header validation
+* transformed-header validation
+* successful Gold loading
+* missing source directories
+* non-existent source directories
+* CSV/JSON file selection
+* leaving unrelated file types untouched
+* repeated execution
+* cron-style execution and logging
+
+The ETL successfully produced a transformed dataset containing the required fields and loaded it into the Gold layer.
+
+## Technologies
+
+* Bash
+* Linux / WSL
+* `curl`
+* `awk`
+* `find`
+* `cron`
+* Git
+* GitHub
+
+## Current Limitations
+
+This project intentionally keeps the implementation within the scope of the bootcamp assignment.
+
+Potential production improvements could include:
+
+* atomic or staged loading into the Gold layer
+* output versioning or timestamps
+* stronger data-quality validation
+* structured logging
+* alerting and monitoring
+* dependency/orchestration management
+* more robust CSV parsing for complex CSV edge cases
+
+A fixed row-count validation was deliberately not implemented because the source dataset can legitimately change in size.
+
+## Key Learning
+
+This project strengthened practical understanding of Bash-based ETL concepts including:
+
+* environment variables
+* command-line arguments
+* shell variables and quoting
+* exit codes
+* conditional execution
+* command substitution
+* pipes and redirection
+* CSV field extraction with `awk`
+* file and directory validation
+* cron scheduling
+* logging
+* Git workflow
+
+The main lesson was that an ETL pipeline is not simply about moving data from one location to another. Each stage should provide enough validation and failure handling to prevent an invalid result from silently moving further through the pipeline.
